@@ -3,6 +3,9 @@ mod dc;
 mod eeprom;
 pub mod pdi;
 pub mod ports;
+// Mailbox passthrough API uses heap-allocating types and is only available with `std`.
+#[cfg(feature = "std")]
+mod mailbox_passthrough;
 mod types;
 
 use crate::{
