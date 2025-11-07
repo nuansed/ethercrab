@@ -558,6 +558,38 @@ where
         self.state.dc_sync
     }
 
+    /// Returns true if the SubDevice exposes CoE mailboxes that can service SDO transfers.
+    #[inline]
+    pub fn supports_coe(&self) -> bool {
+        let mailbox = &self.state.config.mailbox;
+
+        mailbox.has_coe && mailbox.read.is_some() && mailbox.write.is_some()
+    }
+
+    /// Read the start, length and control registers for a sync manager from the ESC.
+    pub async fn sync_manager_window(
+        &self,
+        index: u8,
+    ) -> Result<(u16, u16, u16), Error> {
+        let base = RegisterAddress::sync_manager(index);
+        let data = self
+            .read(base)
+            .receive_slice(self.maindevice, 6)
+            .await?;
+
+        let bytes = data.as_ref();
+
+        if bytes.len() < 6 {
+            return Err(Error::Internal);
+        }
+
+        let start = u16::from_le_bytes([bytes[0], bytes[1]]);
+        let length = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let control = u16::from_le_bytes([bytes[4], bytes[5]]);
+
+        Ok((start, length, control))
+    }
+
     /// Read a value from an SDO (Service Data Object) from the given index (address) and sub-index.
     pub async fn sdo_read<T>(&self, index: u16, sub_index: impl Into<SubIndex>) -> Result<T, Error>
     where
@@ -755,7 +787,7 @@ impl<'maindevice, S> SubDeviceRef<'maindevice, S> {
         futures_lite::future::try_zip(self.state(), code).await
     }
 
-    fn eeprom(&self) -> SubDeviceEeprom<DeviceEeprom> {
+    fn eeprom(&self) -> SubDeviceEeprom<DeviceEeprom<'_>> {
         SubDeviceEeprom::new(DeviceEeprom::new(self.maindevice, self.configured_address))
     }
 

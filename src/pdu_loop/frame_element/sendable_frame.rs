@@ -74,6 +74,7 @@ impl<'sto> SendableFrame<'sto> {
         self.inner.set_state(FrameState::Sent);
     }
 
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     pub(crate) fn storage_slot_index(&self) -> u8 {
         self.inner.storage_slot_index()
     }
