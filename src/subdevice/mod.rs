@@ -526,6 +526,38 @@ where
         self.state.dc_sync
     }
 
+    /// Returns true if the SubDevice exposes CoE mailboxes that can service SDO transfers.
+    #[inline]
+    pub fn supports_coe(&self) -> bool {
+        let mailbox = &self.state.config.mailbox;
+
+        mailbox.has_coe && mailbox.read.is_some() && mailbox.write.is_some()
+    }
+
+    /// Read the start, length and control registers for a sync manager from the ESC.
+    pub async fn sync_manager_window(
+        &self,
+        index: u8,
+    ) -> Result<(u16, u16, u16), Error> {
+        let base = RegisterAddress::sync_manager(index);
+        let data = self
+            .read(base)
+            .receive_slice(self.maindevice, 6)
+            .await?;
+
+        let bytes = data.as_ref();
+
+        if bytes.len() < 6 {
+            return Err(Error::Internal);
+        }
+
+        let start = u16::from_le_bytes([bytes[0], bytes[1]]);
+        let length = u16::from_le_bytes([bytes[2], bytes[3]]);
+        let control = u16::from_le_bytes([bytes[4], bytes[5]]);
+
+        Ok((start, length, control))
+    }
+
     /// Return the current cyclic mailbox counter value, from 0-7.
     ///
     /// Calling this method internally increments the counter, so subequent calls will produce a new
@@ -621,7 +653,7 @@ where
     }
 
     /// Wait for a mailbox response
-    async fn coe_response(&self, read_mailbox: &Mailbox) -> Result<ReceivedPdu, Error> {
+    async fn coe_response(&self, read_mailbox: &Mailbox) -> Result<ReceivedPdu<'_>, Error> {
         let mailbox_read_sm = RegisterAddress::sync_manager_status(read_mailbox.sync_manager);
 
         // Wait for SubDevice OUT mailbox to be ready
@@ -1237,7 +1269,7 @@ impl<'maindevice, S> SubDeviceRef<'maindevice, S> {
         futures_lite::future::try_zip(self.state(), code).await
     }
 
-    fn eeprom(&self) -> SubDeviceEeprom<DeviceEeprom> {
+    fn eeprom(&self) -> SubDeviceEeprom<DeviceEeprom<'_>> {
         SubDeviceEeprom::new(DeviceEeprom::new(self.maindevice, self.configured_address))
     }
 
