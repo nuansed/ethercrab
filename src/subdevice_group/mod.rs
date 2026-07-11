@@ -130,9 +130,9 @@ struct GroupInner<const MAX_SUBDEVICES: usize> {
     pdi_start: PdiOffset,
 }
 
-const CYCLIC_OP_ENABLE: u8 = 0b0000_0001;
-const SYNC0_ACTIVATE: u8 = 0b0000_0010;
-const SYNC1_ACTIVATE: u8 = 0b0000_0100;
+const CYCLIC_OP_ENABLE: u16 = 0b0000_0001;
+const SYNC0_ACTIVATE: u16 = 0b0000_0010;
+const SYNC1_ACTIVATE: u16 = 0b0000_0100;
 
 /// Group distributed clock configuration.
 #[derive(Default, Debug, Copy, Clone)]
@@ -420,11 +420,19 @@ where
         let first_pulse_delay = u64::from(u32::try_from(start_delay.as_nanos())?);
 
         for subdevice in dc_devices {
-            fmt::debug!(
-                "--> Configuring SubDevice {:#06x} {} DC mode {}",
-                subdevice.configured_address(),
+            let identity = subdevice.identity();
+            let dc_mode = subdevice.dc_sync();
+            let addr = subdevice.configured_address();
+
+            fmt::info!(
+                "--> DC config slave=0x{addr:04x} name={} vendor={:#010x} product={:#010x} mode={:?} sync0_period_ns={} shift_ns={} start_delay_ns={}",
                 subdevice.name(),
-                subdevice.dc_sync()
+                identity.vendor_id,
+                identity.product_id,
+                dc_mode,
+                sync0_period,
+                sync0_shift.as_nanos(),
+                start_delay.as_nanos(),
             );
 
             // Disable cyclic op, ignore WKC
@@ -456,18 +464,42 @@ where
                 .send(maindevice, sync0_period)
                 .await?;
 
-            let flags = if let DcSync::Sync01 { sync1_period } = subdevice.dc_sync() {
-                let sync1_period = u64::from(u32::try_from(sync1_period.as_nanos())?);
+            let flags = match dc_mode {
+                DcSync::Sync01 { sync1_period } => {
+                    let sync1_period = u64::from(u32::try_from(sync1_period.as_nanos())?);
 
-                subdevice
-                    .write(RegisterAddress::DcSync1CycleTime)
-                    .send(maindevice, sync1_period)
-                    .await?;
+                    subdevice
+                        .write(RegisterAddress::DcSync1CycleTime)
+                        .send(maindevice, sync1_period)
+                        .await?;
 
-                SYNC1_ACTIVATE | SYNC0_ACTIVATE | CYCLIC_OP_ENABLE
-            } else {
-                SYNC0_ACTIVATE | CYCLIC_OP_ENABLE
+                    SYNC1_ACTIVATE | SYNC0_ACTIVATE | CYCLIC_OP_ENABLE
+                }
+                DcSync::Sync0 => SYNC0_ACTIVATE | CYCLIC_OP_ENABLE,
+                DcSync::Disabled => 0,
             };
+
+            fmt::info!(
+                "--> DC registers {:#06x} flags=0x{:02x} start_time={} sync0={} sync1={} (ns)",
+                addr,
+                flags,
+                start_time,
+                sync0_period,
+                match dc_mode {
+                    DcSync::Sync01 { sync1_period } => {
+                        u64::from(u32::try_from(sync1_period.as_nanos())?)
+                    }
+                    _ => 0,
+                }
+            );
+
+            let is_inovance = matches!(identity.vendor_id, 0x0000_066F | 0x0010_0000);
+            let flags = if is_inovance { flags << 8 } else { flags };
+
+            fmt::info!(
+                "dc-activate slave=0x{addr:04x} flags=0x{flags:04x} vendor_override={}",
+                is_inovance
+            );
 
             subdevice
                 .write(RegisterAddress::DcSyncActive)

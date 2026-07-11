@@ -535,15 +535,9 @@ where
     }
 
     /// Read the start, length and control registers for a sync manager from the ESC.
-    pub async fn sync_manager_window(
-        &self,
-        index: u8,
-    ) -> Result<(u16, u16, u16), Error> {
+    pub async fn sync_manager_window(&self, index: u8) -> Result<(u16, u16, u16), Error> {
         let base = RegisterAddress::sync_manager(index);
-        let data = self
-            .read(base)
-            .receive_slice(self.maindevice, 6)
-            .await?;
+        let data = self.read(base).receive_slice(self.maindevice, 6).await?;
 
         let bytes = data.as_ref();
 

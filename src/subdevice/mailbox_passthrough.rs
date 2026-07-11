@@ -55,11 +55,12 @@ where
         let deadline = Instant::now() + timeout;
         #[cfg(not(feature = "std"))]
         let _deadline = ();
-        
+
         async {
             // Drain stale data from SM1
             let sm1_status_addr = RegisterAddress::sync_manager_status(read_mailbox.sync_manager);
-            let mut sm1_status: SmStatus = self.read(sm1_status_addr).receive(self.maindevice).await?;
+            let mut sm1_status: SmStatus =
+                self.read(sm1_status_addr).receive(self.maindevice).await?;
             let mut drain_attempts = 0;
             const MAX_DRAIN_ATTEMPTS: u32 = 10;
             while sm1_status.mailbox_full && drain_attempts < MAX_DRAIN_ATTEMPTS {
@@ -79,7 +80,7 @@ where
             }
 
             let sm0_status_addr = RegisterAddress::sync_manager_status(write_mailbox.sync_manager);
-            
+
             loop {
                 #[cfg(feature = "std")]
                 if Instant::now() >= deadline {
@@ -115,21 +116,21 @@ where
                     if reply.len() < 6 {
                         return Err(Error::Mailbox(MailboxError::InvalidCount));
                     }
-                    
+
                     let reply_len = u16::from_le_bytes([reply[0], reply[1]]) as usize;
                     let total_len = 6 + reply_len;
-                    
+
                     if total_len > reply.len() {
                         return Err(Error::Mailbox(MailboxError::InvalidCount));
                     }
-                    
+
                     if total_len > read_mailbox.len as usize {
                         return Err(Error::Mailbox(MailboxError::TooLong {
                             address: self.configured_address,
                             sub_index: 0,
                         }));
                     }
-                    
+
                     let mut result = vec![0u8; total_len];
                     result.copy_from_slice(&reply[..total_len]);
                     return Ok(result);

@@ -101,10 +101,18 @@ impl<'sto> PduRx<'sto> {
         // use the first one.
 
         // PDU has its own EtherCAT index. This needs mapping back to the original frame.
-        let frame_index = self
-            .storage
-            .frame_index_by_first_pdu_index(pdu_idx)
-            .ok_or(Error::Pdu(PduError::Decode))?;
+        let frame_index = match self.storage.frame_index_by_first_pdu_index(pdu_idx) {
+            Some(idx) => idx,
+            None => {
+                fmt::error!(
+                    "RX PDU index {:#04x} had no matching frame (frames={}, next_pdu_idx={:#04x})",
+                    pdu_idx,
+                    self.storage.num_frames,
+                    self.storage.pdu_idx.load(Ordering::Relaxed)
+                );
+                return Err(Error::Pdu(PduError::Decode));
+            }
+        };
 
         fmt::trace!(
             "Receiving frame index {} (found from PDU {:#04x})",
@@ -112,10 +120,17 @@ impl<'sto> PduRx<'sto> {
             pdu_idx
         );
 
-        let mut frame = self
-            .storage
-            .claim_receiving(frame_index)
-            .ok_or(PduError::InvalidIndex(frame_index))?;
+        let mut frame = match self.storage.claim_receiving(frame_index) {
+            Some(frame) => frame,
+            None => {
+                fmt::error!(
+                    "RX mapping resolved but failed to claim frame={} for PDU {:#04x}",
+                    frame_index,
+                    pdu_idx
+                );
+                return Err(PduError::InvalidIndex(frame_index).into());
+            }
+        };
 
         let frame_data = frame.buf_mut();
 
