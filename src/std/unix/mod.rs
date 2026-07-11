@@ -76,6 +76,10 @@ impl<'a> Future for TxRxFut<'a> {
             if let Err(e) = res {
                 fmt::error!("Send PDU failed: {}", e);
 
+                // Signal RX loop to exit and release all frames to avoid stale indices for in-flight PDUs.
+                let rx = unsafe { self.rx.take().unwrap_unchecked() };
+                let rx = rx.release();
+                self.rx = Some(rx);
                 return Poll::Ready(Err(e));
             }
         }
@@ -101,6 +105,9 @@ impl<'a> Future for TxRxFut<'a> {
                 {
                     fmt::error!("Failed to receive frame: {}", e);
 
+                    let rx = unsafe { self.rx.take().unwrap_unchecked() };
+                    let rx = rx.release();
+                    self.rx = Some(rx);
                     return Poll::Ready(Err(Error::ReceiveFrame));
                 }
             }

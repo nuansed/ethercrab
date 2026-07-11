@@ -199,11 +199,14 @@ impl<const N: usize> FrameElement<N> {
     unsafe fn claim_receiving(this: NonNull<FrameElement<N>>) -> Option<NonNull<FrameElement<N>>> {
         unsafe { Self::swap_state(this, FrameState::Sent, FrameState::RxBusy) }
             .map_err(|actual_state| {
+                let slot = unsafe { *addr_of_mut!((*this.as_ptr()).storage_slot_index) };
+                let first_pdu = unsafe { (*addr_of!((*this.as_ptr()).first_pdu)).load(Ordering::Acquire) };
                 fmt::error!(
-                    "Failed to claim receiving frame {}: expected state {:?}, but got {:?}",
-                    unsafe { *addr_of_mut!((*this.as_ptr()).storage_slot_index) },
+                    "Failed to claim receiving frame {}: expected state {:?}, but got {:?} (first_pdu=0x{:04x})",
+                    slot,
                     FrameState::Sent,
-                    actual_state
+                    actual_state,
+                    first_pdu,
                 );
             })
             .ok()

@@ -53,10 +53,21 @@ impl<'sto> ReceivedFrame<'sto> {
         }
 
         if pdu_header.command_code != handle.command_code {
+            fmt::error!(
+                "PDU command mismatch while parsing response: expected {:?} got {:?} (idx={:#04x})",
+                handle.command_code,
+                pdu_header.command_code,
+                pdu_header.index
+            );
             return Err(Error::Pdu(PduError::Decode));
         }
 
         if pdu_header.index != handle.pdu_idx {
+            fmt::error!(
+                "PDU index mismatch while parsing response: expected {:#04x} got {:#04x}",
+                handle.pdu_idx,
+                pdu_header.index
+            );
             return Err(Error::Pdu(PduError::InvalidIndex(pdu_header.index)));
         }
 
@@ -104,10 +115,21 @@ impl<'sto> ReceivedFrame<'sto> {
         let pdu_header = PduHeader::unpack_from_slice(buf)?;
 
         if pdu_header.command_code != handle.command_code {
+            fmt::error!(
+                "PDU command mismatch while parsing response (iter): expected {:?} got {:?} (idx={:#04x})",
+                handle.command_code,
+                pdu_header.command_code,
+                pdu_header.index
+            );
             return Err(Error::Pdu(PduError::Decode));
         }
 
         if pdu_header.index != handle.pdu_idx {
+            fmt::error!(
+                "PDU index mismatch while parsing response (iter): expected {:#04x} got {:#04x}",
+                handle.pdu_idx,
+                pdu_header.index
+            );
             return Err(Error::Pdu(PduError::InvalidIndex(pdu_header.index)));
         }
 
