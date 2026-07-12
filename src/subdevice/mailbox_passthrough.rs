@@ -93,8 +93,11 @@ where
                 self.maindevice.timeouts.loop_tick().await;
             }
 
+            // The ESC only latches a mailbox write when the last byte of the
+            // SM buffer is written, so always write the full mailbox length
+            // (mirrors send_coe_service).
             self.write(write_mailbox.address)
-                .with_len(logical_len as u16)
+                .with_len(write_mailbox.len)
                 .send(self.maindevice, &request[..logical_len])
                 .await?;
 
