@@ -1,5 +1,5 @@
 use crate::{
-    error::{Error, MailboxError},
+    error::{Error, MailboxError, TimeoutError},
     register::RegisterAddress,
     subdevice::{SubDevice, SubDeviceRef},
     sync_manager_channel::Status as SmStatus,
@@ -66,7 +66,7 @@ where
             while sm1_status.mailbox_full && drain_attempts < MAX_DRAIN_ATTEMPTS {
                 #[cfg(feature = "std")]
                 if Instant::now() >= deadline {
-                    return Err(Error::Timeout);
+                    return Err(Error::Timeout(TimeoutError::MailboxResponse));
                 }
                 self.read(read_mailbox.address)
                     .ignore_wkc()
@@ -84,7 +84,7 @@ where
             loop {
                 #[cfg(feature = "std")]
                 if Instant::now() >= deadline {
-                    return Err(Error::Timeout);
+                    return Err(Error::Timeout(TimeoutError::MailboxResponse));
                 }
                 let sm0: SmStatus = self.read(sm0_status_addr).receive(self.maindevice).await?;
                 if !sm0.mailbox_full {
@@ -104,7 +104,7 @@ where
             loop {
                 #[cfg(feature = "std")]
                 if Instant::now() >= deadline {
-                    return Err(Error::Timeout);
+                    return Err(Error::Timeout(TimeoutError::MailboxResponse));
                 }
                 let sm1: SmStatus = self.read(sm1_status_addr).receive(self.maindevice).await?;
 
