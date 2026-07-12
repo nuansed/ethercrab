@@ -1,4 +1,5 @@
 use crate::{
+    fmt,
     error::{Error, MailboxError},
     register::RegisterAddress,
     subdevice::{SubDevice, SubDeviceRef},
@@ -93,12 +94,25 @@ where
                 self.maindevice.timeouts.loop_tick().await;
             }
 
+            // The gateway owns the mailbox counter: external tools restart
+            // their own sequence per session, and a counter equal to the
+            // slave's last-seen value is treated as a repeat and ignored.
+            // Using the shared per-subdevice counter also keeps a single
+            // owner alongside EtherCrab's own CoE traffic.
+            let mut framed = request[..logical_len].to_vec();
+            let counter = fmt::unwrap!(self.state.mailbox_counter.fetch_update(
+                core::sync::atomic::Ordering::Release,
+                core::sync::atomic::Ordering::Acquire,
+                |n| if n >= 7 { Some(1) } else { Some(n + 1) }
+            ));
+            framed[5] = (framed[5] & 0x0F) | (counter << 4);
+
             // The ESC only latches a mailbox write when the last byte of the
             // SM buffer is written, so always write the full mailbox length
             // (mirrors send_coe_service).
             self.write(write_mailbox.address)
                 .with_len(write_mailbox.len)
-                .send(self.maindevice, &request[..logical_len])
+                .send(self.maindevice, framed.as_slice())
                 .await?;
 
             loop {
